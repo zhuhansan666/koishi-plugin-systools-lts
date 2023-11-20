@@ -2,13 +2,6 @@ import { machineIdSync } from 'node-machine-id'
 
 import { systoolsGlobal } from "../types/types"
 
-const defaultFrequency = {
-    commands: 0,
-    receivedMessages: 0,
-    sendMessages: 0,
-    result: null
-}
-
 export function getUseFrequency(commands: number, receivedMessages: number, sendMessages: number): number {
     return (commands * 50 + receivedMessages * 20 + sendMessages * 30) / 100
 }
@@ -18,39 +11,14 @@ export const defaultGlobal: systoolsGlobal = {
     eventsLoopIntervalId: null,
     eventsList: [],
     updateStatus: {
-        updated: false,
+        tiped: false,
         code: 0,
         msg: 'init',
         desc: '',
         timestamp: null,
-        totalTried: 0
+        totalTried: 0,
+        latest: '0.0.0'
     },
-    useFrequencys: [
-        Object.assign([], defaultFrequency),  // 00:00, to 00:59:59
-        Object.assign([], defaultFrequency),  // 01:00, to 01:59:59
-        Object.assign([], defaultFrequency),  // ...
-        Object.assign([], defaultFrequency),
-        Object.assign([], defaultFrequency),
-        Object.assign([], defaultFrequency),
-        Object.assign([], defaultFrequency),
-        Object.assign([], defaultFrequency),
-        Object.assign([], defaultFrequency),
-        Object.assign([], defaultFrequency),
-        Object.assign([], defaultFrequency),
-        Object.assign([], defaultFrequency),
-        Object.assign([], defaultFrequency),
-        Object.assign([], defaultFrequency),
-        Object.assign([], defaultFrequency),
-        Object.assign([], defaultFrequency),
-        Object.assign([], defaultFrequency),
-        Object.assign([], defaultFrequency),
-        Object.assign([], defaultFrequency),
-        Object.assign([], defaultFrequency),
-        Object.assign([], defaultFrequency),
-        Object.assign([], defaultFrequency),
-        Object.assign([], defaultFrequency),  // ...
-        Object.assign([], defaultFrequency),  // 23:00 to 23:59:59
-    ],
     packageJson: {},
 }
 

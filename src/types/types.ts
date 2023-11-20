@@ -17,56 +17,22 @@ export type execProcess = {
     session: Session
 }
 
-export type useFrequencys = {
-    commands: number,
-    receivedMessages: number,
-    sendMessages: number,
-    result?: number  // 这个就是判断的标准, 通过上面命令调用次数 收到的信息个数 发送的信息个数综合计算的
-    // result 越小代表该时段约不常用
-    // 计算公式: (commands * 50 + receivedMessages * 20 + sendMessages * 30) / 100
-}
-
 export type systoolsGlobal = {
     systoolsGlobalCacheFile: string
     eventsLoopIntervalId: number,
     eventsList: Array<Events>,
     updateStatus: UpdateStatus,
-    useFrequencys: [
-        useFrequencys,  // 00:00 to 00:59:59
-        useFrequencys,  // 01:00 to 01:59:59
-        useFrequencys,  // ...
-        useFrequencys,
-        useFrequencys,
-        useFrequencys,
-        useFrequencys,
-        useFrequencys,
-        useFrequencys,
-        useFrequencys,
-        useFrequencys,
-        useFrequencys,
-        useFrequencys,
-        useFrequencys,
-        useFrequencys,
-        useFrequencys,
-        useFrequencys,
-        useFrequencys,
-        useFrequencys,
-        useFrequencys,
-        useFrequencys,
-        useFrequencys,
-        useFrequencys,  // ...
-        useFrequencys,  // 23:00 to 23:59:59
-    ],
     packageJson: object,
 }
 
 export type UpdateStatus = {
-    updated: boolean  // 上次是否更新
+    tiped: boolean  // 上次是否更新
     code: number  // 0 -> no error
     msg: 'isLatest' | 'updatedSuccessfully' | 'updateError' | 'init'
     desc: string
     timestamp: number  // 时间戳
     totalTried: number  // 连续尝试次数
+    latest: string
 }
 
 export type ipAPIResult = {  // https://ip-api.com/docs/api:json

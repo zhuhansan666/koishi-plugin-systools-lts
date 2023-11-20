@@ -1,16 +1,15 @@
 import { Context, Schema, Session, Time, remove } from 'koishi'
 import path from 'path'
 
-import { machineId, getUseFrequency } from './configs/configs'
+import { machineId } from './configs/configs'
+import { Object2String } from "./debug/functions"
 
-export const name = 'systools'
+export const name = 'systools-lts'
 
 export const usage = `
 ## 设备唯一识别码
 * ${machineId}
 `
-
-export const using = ['console.dependencies']
 
 export interface Config {
     axiosConfig: boolean,
@@ -143,7 +142,7 @@ export const Config: Schema<Config> = Schema.intersect([
 ]) as Schema<Config>  // 奇奇怪怪的 bug 给他修掉
 
 import { backup } from './common/backup'
-import { getReloadTime, logger, systoolsGlobal } from './share'
+import { logger, systoolsGlobal } from './share'
 
 import ping from './commands/ping'
 import exec from './commands/exec'
@@ -191,6 +190,7 @@ export async function apply(ctx: Context, config: Config) {
         logger.warn(`读取 package.json 错误: ${packageJsonMsg}`)
     }
     systoolsGlobal.packageJson = packageJson
+    systoolsGlobal.updateStatus.latest = systoolsGlobal.packageJson['version'] ?? '0.0.0'
 
     systoolsGlobal.eventsLoopIntervalId = parseInt(setInterval(async () => {
         await loop(systoolsGlobal.eventsList)
@@ -289,7 +289,7 @@ export async function apply(ctx: Context, config: Config) {
             })
 
             const updateStatus = systoolsGlobal.updateStatus
-            updateStatus.updated = true
+            updateStatus.tiped = true
 
             const { status, data: latestVersion, msg } = await getLatestVersion(ctx, packageJson['name'])
             if (status) {
@@ -303,14 +303,15 @@ export async function apply(ctx: Context, config: Config) {
                 return
             }
 
-            if (!checkVersion(latestVersion, packageJson['version'])) {
+            if (!checkVersion(latestVersion, updateStatus.latest)) {
                 logger.debug(`已经是最新版本 (${latestVersion}) 或更高版本, 退出更新操作`)
-                updateStatus.updated = false
+                updateStatus.tiped = false
                 updateStatus.code = 0
                 updateStatus.msg = 'isLatest'
                 updateStatus.desc = `已经是最新版本 (${latestVersion}) 或更高版本`
                 updateStatus.timestamp = Date.now()
                 updateStatus.totalTried = 0
+                updateStatus.latest = latestVersion
                 writeFile(systoolsGlobalCacheFile, systoolsGlobal)
                 return
             }
@@ -318,7 +319,7 @@ export async function apply(ctx: Context, config: Config) {
             if (config.maxTry > 0 && updateStatus.totalTried > config.maxTry) {
                 if (updateStatus.timestamp && Date.now() - updateStatus.timestamp <= config.failedColdTime * Time.second) {
                     logger.debug(`超过最大连续更新尝试上限, 退出更新操作`)
-                    updateStatus.updated = false
+                    updateStatus.tiped = false
                     writeFile(systoolsGlobalCacheFile, systoolsGlobal)
                     return
                 } else {
@@ -326,45 +327,15 @@ export async function apply(ctx: Context, config: Config) {
                 }
             }
 
-            const deps = {}
-            deps[packageJson['name']] = latestVersion
-            const { status: installStatus } = await install(ctx, deps)
-
-            if (installStatus) {
-                logger.warn(`更新失败`)
-                updateStatus.code = -1
-                updateStatus.msg = 'updateError'
-                updateStatus.desc = '更新失败'
-                updateStatus.timestamp = Date.now()
-                updateStatus.totalTried += 1
-                writeFile(systoolsGlobalCacheFile, systoolsGlobal)
-                return
-            }
-
-            logger.info(`更新成功 ${packageJson['version']} => ${latestVersion}`)
+            // 提醒过了就当作更新了 (x
+            logger.info(`有新版本啦! (${updateStatus.latest} => ${latestVersion})`)
+            updateStatus.tiped = true
             updateStatus.code = 0
             updateStatus.msg = 'updatedSuccessfully'
-            updateStatus.desc = `更新成功 ${packageJson['version']} => ${latestVersion}`
+            updateStatus.desc = `有新版本啦! (${updateStatus.latest} => ${latestVersion})`
             updateStatus.timestamp = Date.now()
             updateStatus.totalTried = 0
-
-            const reloadTime = getReloadTime(systoolsGlobal.useFrequencys)
-            const date = new Date()
-            let target = null
-            if (date.getHours() > reloadTime) {
-                target = date.getTime() + ((24 + reloadTime) - date.getHours()) * Time.hour
-            } else {
-                target = date.getTime() + (reloadTime - date.getHours()) * Time.hour
-            }
-
-            systoolsGlobal.eventsList.push({  // 下一次检查更新的 event
-                name: 'reload',
-                target: target,
-                flags: ['clearAfterReload', 'keepEarliest'],
-                catched: false
-            })
-            logger.info(`o.O? 如果您看到 koishi 框架半夜重启是否会十分奇怪? 不必担心, 这只是 systools 即为先进 (余大嘴音) 的自动更新功能, 会自动识别机器人使用频率最低的时端重启框架以应用更新\n系统检测到您在 ${reloadTime} 点到 ${reloadTime + 1} 点(24小时制)使用频率最低, 我们将在该时段重启机器人框架以应用更新`)
-            logger.debug(`下次重载时间: ${target}`)
+            updateStatus.latest = latestVersion
 
             writeFile(systoolsGlobalCacheFile, systoolsGlobal)
         }
@@ -380,29 +351,29 @@ export async function apply(ctx: Context, config: Config) {
 
     writeFile(systoolsGlobalCacheFile, systoolsGlobal)  // 更新 backupIntervalId 和/或 githubBackupIntervalId
 
-    ctx.on('command/before-execute', () => {
-        const obj = systoolsGlobal.useFrequencys[new Date().getHours()]
-        obj.commands += 1
-        obj.result = getUseFrequency(obj.commands, obj.receivedMessages, obj.sendMessages)
+    // ctx.on('command/before-execute', () => {
+    //     const obj = systoolsGlobal.useFrequencys[new Date().getHours()]
+    //     obj.commands += 1
+    //     obj.result = getUseFrequency(obj.commands, obj.receivedMessages, obj.sendMessages)
 
-        writeFile(systoolsGlobalCacheFile, systoolsGlobal)
-    })
+    //     writeFile(systoolsGlobalCacheFile, systoolsGlobal)
+    // })
 
-    ctx.on('message', () => {
-        const obj = systoolsGlobal.useFrequencys[new Date().getHours()]
-        obj.receivedMessages += 1
-        obj.result = getUseFrequency(obj.commands, obj.receivedMessages, obj.sendMessages)
+    // ctx.on('message', () => {
+    //     const obj = systoolsGlobal.useFrequencys[new Date().getHours()]
+    //     obj.receivedMessages += 1
+    //     obj.result = getUseFrequency(obj.commands, obj.receivedMessages, obj.sendMessages)
 
-        writeFile(systoolsGlobalCacheFile, systoolsGlobal)
-    })
+    //     writeFile(systoolsGlobalCacheFile, systoolsGlobal)
+    // })
 
-    ctx.on('send', () => {
-        const obj = systoolsGlobal.useFrequencys[new Date().getHours()]
-        obj.sendMessages += 1
-        obj.result = getUseFrequency(obj.commands, obj.receivedMessages, obj.sendMessages)
+    // ctx.on('send', () => {
+    //     const obj = systoolsGlobal.useFrequencys[new Date().getHours()]
+    //     obj.sendMessages += 1
+    //     obj.result = getUseFrequency(obj.commands, obj.receivedMessages, obj.sendMessages)
 
-        writeFile(systoolsGlobalCacheFile, systoolsGlobal)
-    })
+    //     writeFile(systoolsGlobalCacheFile, systoolsGlobal)
+    // })
 
     const commands = ['systools', 'systools/system', 'systools/process', 'systools/debug',]
 
@@ -480,18 +451,18 @@ export async function apply(ctx: Context, config: Config) {
     if (process.env.NODE_ENV === 'development') {
         const debug = require('./debug/functions')
 
-        ctx.command('systools/debug/suse')  // 突然想写这个
-            // o.O? 您看到 koishi 框架半夜重启是否十分奇怪? 不必担心, 这只是 systools 即为先进 (余大嘴音) 的自动更新功能, 会自动识别机器人使用频率最低的时端重启框架以应用更新\n系统检测到您在 ${key} 点到 ${key+1} 点(24小时制)使用频率最低, 我们将在该时段重启机器人框架以应用更新
-            .action(() => {
-                return debug.Object2String(systoolsGlobal.useFrequencys)
-            })
+        // ctx.command('systools/debug/suse')  // 突然想写这个
+        //     // o.O? 您看到 koishi 框架半夜重启是否十分奇怪? 不必担心, 这只是 systools 即为先进 (余大嘴音) 的自动更新功能, 会自动识别机器人使用频率最低的时端重启框架以应用更新\n系统检测到您在 ${key} 点到 ${key+1} 点(24小时制)使用频率最低, 我们将在该时段重启机器人框架以应用更新
+        //     .action(() => {
+        //         return debug.Object2String(systoolsGlobal.useFrequencys)
+        //     })
 
-        ctx.command('systools/debug/supdate')
+        ctx.command('systools.debug.update')
             .action(() => {
                 return debug.Object2String(systoolsGlobal.updateStatus)
             })
 
-        ctx.command('systools/debug/events')
+        ctx.command('systools.debug.events')
             .action(() => {
                 return debug.Object2String(systoolsGlobal.eventsList)
             })

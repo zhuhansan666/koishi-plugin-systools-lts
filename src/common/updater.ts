@@ -10,7 +10,7 @@ export async function getLatestVersion(ctx: Context, pluginFullName: string): fu
     /**
      * @param pluginFullName like `koishi-plugin-systools`
      */
-    const APIBase = new URL(ctx.installer.endpoint ?? 'https://registry.npmjs.org/')
+    const APIBase = new URL('https://registry.npmjs.org/')
 
     try {
         const { data } = await get(ctx, `https://${APIBase.host}/${pluginFullName}/latest`)
