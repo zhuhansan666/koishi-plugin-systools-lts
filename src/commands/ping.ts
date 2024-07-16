@@ -1,4 +1,5 @@
 import { Session, Context, h } from "koishi"
+import {} from '@koishijs/plugin-http'
 
 import { ipAPI, ipAPIArgs } from "../configs/configs"
 import { ipAPIResult } from "../types/types"
@@ -24,7 +25,7 @@ export default async function ping(ctx: Context, session: Session, ip: string) {
     }
 
     try {
-        const data: ipAPIResult = (await ctx.http.axios(`${ipAPI}${ip ?? ''}?${ipAPIArgs}`, { timeout: config.axiosConfig ? config.axiosTimeout : null, validateStatus: () => { return true } })).data
+        const data: ipAPIResult = await ctx.http.get(`${ipAPI}${ip ?? ''}?${ipAPIArgs}`, { timeout: config.axiosConfig ? config.axiosTimeout : null, validateStatus: () => { return true } })
         if (!data || typeof data === 'string') {
             return `请求失败, 返回值不符合 JSON 标准\n${data}`
         } else if (data.status == 'fail') {

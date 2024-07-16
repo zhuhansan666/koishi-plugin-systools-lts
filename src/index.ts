@@ -1,10 +1,12 @@
 import { Context, Schema, Session, Time, remove } from 'koishi'
+import {} from '@koishijs/plugin-http'
 import path from 'path'
 
 import { machineId } from './configs/configs'
 import { Object2String } from "./debug/functions"
 
 export const name = 'systools-lts'
+export const inject = ['http']
 
 export const usage = `
 ## 设备唯一识别码

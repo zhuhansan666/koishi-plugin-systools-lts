@@ -1,4 +1,5 @@
 import { Context, Session, Time, h } from "koishi";
+import {} from '@koishijs/plugin-http'
 
 import { systoolsGlobal } from "../share";
 import { getLatestVersion, checkVersion, install } from '../common/updater'

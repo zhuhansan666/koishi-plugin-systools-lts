@@ -13,7 +13,7 @@ export async function getLatestVersion(ctx: Context, pluginFullName: string): fu
     const APIBase = new URL('https://registry.npmjs.org/')
 
     try {
-        const { data } = await get(ctx, `https://${APIBase.host}/${pluginFullName}/latest`)
+        const data = await get(ctx, `https://${APIBase.host}/${pluginFullName}/latest`)
 
         if (!data || !data.version) {
             return {

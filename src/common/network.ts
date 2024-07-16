@@ -17,7 +17,7 @@ export function post(ctx: Context, url: string, data?: object, options?: object)
 
 export function get(ctx: Context, url: string, data?: object, options?: object) {
     const config: Config = ctx.config
-    return ctx.http.axios(
+    return ctx.http.get(
         url,
         {
             params: data,

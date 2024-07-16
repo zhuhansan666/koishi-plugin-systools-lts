@@ -1,4 +1,5 @@
 import { Context } from "koishi"
+import {} from '@koishijs/plugin-http'
 
 import { functionStatusPromise } from "../types/types"
 import { Config } from ".."

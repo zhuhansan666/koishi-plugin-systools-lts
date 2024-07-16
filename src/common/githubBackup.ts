@@ -1,5 +1,6 @@
 // TODO: 使用 Github API 备份文件
 import { Context } from "koishi"
+import {} from '@koishijs/plugin-http'
 import path from "path"
 
 import { repoInfo, createRepo, upload, remove, searchFileByName, repoFilesinfo, repoFileinfo, repoDirInfo } from "./githubAPI"

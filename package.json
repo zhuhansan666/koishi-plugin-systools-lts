@@ -1,7 +1,7 @@
 {
     "name": "koishi-plugin-systools-lts",
     "description": "systools 2.0",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "main": "lib/index.js",
     "typings": "lib/index.d.ts",
     "files": [
@@ -14,10 +14,10 @@
         "test": "lib/index.js"
     },
     "contributors": [
-        "爱喝牛奶の涛哥 <zhuhansan666@outlook.com>"
+        "爱喝牛奶 <zhuhansan666@outlook.com>"
     ],
     "author": {
-        "name": "爱喝牛奶の涛哥",
+        "name": "爱喝牛奶",
         "email": "zhuhansan666@outlook.com",
         "url": "https://github.com/zhuhansan666/"
     },
