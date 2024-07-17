@@ -2,6 +2,7 @@
 import { Context } from "koishi"
 import {} from '@koishijs/plugin-http'
 import path from "path"
+import { stat as fsStat } from "fs/promises"
 
 import { repoInfo, createRepo, upload, remove, searchFileByName, repoFilesinfo, repoFileinfo, repoDirInfo } from "./githubAPI"
 import { Config } from ".."
@@ -37,14 +38,14 @@ async function create(ctx: Context, username: string, repoName: string, token: s
 }
 
 async function getFileBase64(filename: string): Promise<string | null> {
-    const { status, data, msg } = await readFile(filename)
+    const { status, data, msg } = await readFile(filename, 'base64')
 
     if (status != 0) {
         logger.warn(`读取最新备份文件失败: %j ${msg}`, data)
         return null
     }
     try {
-        return Buffer.from(data).toString('base64')
+        return data
     } catch (error) {
         logger.warn(`将最新备份文件转为 base64 失败: ${error}`)
         return null
@@ -77,6 +78,12 @@ export async function githubBackup(ctx: Context, filename: string, githubPath: s
     const token = config.githubToken
 
     logger.info(`尝试将备份上传至 Github`)
+
+    const fileStat = await fsStat(filename)
+    if (fileStat.size <= config.skipEmptyThreshold) {
+        logger.info(`文件 ${filename} 小于等于 ${config.skipEmptyThreshold} 字节, 跳过上传`)
+        return
+    }
 
     if (await create(ctx, username, repoName, token)) {  // return 0 时 false, 不退出函数
         logger.info(`备份异常退出`)

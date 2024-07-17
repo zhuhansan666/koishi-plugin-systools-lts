@@ -31,6 +31,7 @@ export interface Config {
     githubToken: string,
     repoName: string,
     githubBackupFiles: Array<string>,
+    skipEmptyThreshold: number,
     githubBackupInterval: number,
     keepGithubBackupFiles: number,
 
@@ -93,7 +94,8 @@ export const Config: Schema<Config> = Schema.intersect([
     Schema.object({
         enableGithubBackup: Schema.boolean()
             .default(false)
-            .description('启用 GitHub 云备份'),
+            .description('启用 GitHub 云备份')
+            .experimental(),
     }).description('云备份配置'),
     Schema.union([
         Schema.object({
@@ -115,6 +117,10 @@ export const Config: Schema<Config> = Schema.intersect([
                 .role('table')
                 .default([])
                 .description('需要备份至 GitHub 的文件, 暂**不支持**正则表达式'),
+            skipEmptyThreshold: Schema.number()
+                .min(-1)
+                .default(0)
+                .description('文件大小小于等于该值时跳过备份 (字节)<br> 小于等于 0 的值禁用该功能'),
             githubBackupInterval: Schema.number()
                 .min(0)
                 .default(Time.hour)
