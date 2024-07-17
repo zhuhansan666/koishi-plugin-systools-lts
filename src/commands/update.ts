@@ -11,8 +11,6 @@ export default async function update(ctx: Context, session: Session) {
 
 
     if (!latestVersion) {
-        return `检查更新失败`
-    } else if (latestVersion === systoolsGlobal.packageJson['version']) {
         return `已是最新版本`
     }
 
