@@ -46,7 +46,7 @@
         "@koishijs/client": "^5.11.0"
     },
     "dependencies": {
-        "koishi-plugin-update-service": "^0.0.6",
+        "koishi-plugin-update-service": "^0.0.7",
         "node-machine-id": "^1.1.12"
     }
 }
