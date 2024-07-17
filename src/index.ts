@@ -2,11 +2,13 @@ import { Context, Schema, Session, Time, remove } from 'koishi'
 import {} from '@koishijs/plugin-http'
 import path from 'path'
 
+import {} from 'koishi-plugin-update-service'
+
 import { machineId } from './configs/configs'
 import { Object2String } from "./debug/functions"
 
 export const name = 'systools-lts'
-export const inject = ['http']
+export const inject = ['http', 'updater']
 
 export const usage = `
 ## 设备唯一识别码
@@ -155,7 +157,7 @@ import update from './commands/update'
 import { readFile, writeFile } from './common/fs'
 import { githubBackup } from './common/githubBackup'
 
-import { getLatestVersion, checkVersion, install, reload } from './common/updater'
+import { reload } from './common/updater'
 import loop from './events/loop'
 import { functions as eventFunctions } from './events/loop'
 
@@ -279,79 +281,79 @@ export async function apply(ctx: Context, config: Config) {
         })
     }
 
-    if (config.checkUpdateInterval > 0) {
-        const checkUpdateFunc = async () => {
-            logger.debug(`开始检查更新`)
+    // if (config.checkUpdateInterval > 0) {
+    //     const checkUpdateFunc = async () => {
+    //         logger.debug(`开始检查更新`)
 
-            systoolsGlobal.eventsList.push({  // 下一次检查更新的 event
-                name: 'checkUpdate',
-                target: Date.now() + config.checkUpdateInterval,
-                flags: ['clearAfterReload'],
-                catched: false
-            })
+    //         systoolsGlobal.eventsList.push({  // 下一次检查更新的 event
+    //             name: 'checkUpdate',
+    //             target: Date.now() + config.checkUpdateInterval,
+    //             flags: ['clearAfterReload'],
+    //             catched: false
+    //         })
 
-            const updateStatus = systoolsGlobal.updateStatus
-            updateStatus.tiped = true
+    //         const updateStatus = systoolsGlobal.updateStatus
+    //         updateStatus.tiped = true
 
-            const { status, data: latestVersion, msg } = await getLatestVersion(ctx, packageJson['name'])
-            if (status) {
-                logger.warn(`检查更新错误: ${msg}, 退出更新操作`)
-                updateStatus.code = -1
-                updateStatus.msg = 'updateError'
-                updateStatus.desc = `检查更新错误: ${msg}`
-                updateStatus.timestamp = Date.now()
-                updateStatus.totalTried += 1
-                writeFile(systoolsGlobalCacheFile, systoolsGlobal)
-                return
-            }
+    //         const { status, data: latestVersion, msg } = await getLatestVersion(ctx, packageJson['name'])
+    //         if (status) {
+    //             logger.warn(`检查更新错误: ${msg}, 退出更新操作${msg instanceof Error ? `\n${msg.stack}` : ''}`)
+    //             updateStatus.code = -1
+    //             updateStatus.msg = 'updateError'
+    //             updateStatus.desc = `检查更新错误: ${msg}`
+    //             updateStatus.timestamp = Date.now()
+    //             updateStatus.totalTried += 1
+    //             writeFile(systoolsGlobalCacheFile, systoolsGlobal)
+    //             return
+    //         }
 
-            if (!checkVersion(latestVersion, updateStatus.latest)) {
-                logger.debug(`已经是最新版本 (${latestVersion}) 或更高版本, 退出更新操作`)
-                updateStatus.tiped = false
-                updateStatus.code = 0
-                updateStatus.msg = 'isLatest'
-                updateStatus.desc = `已经是最新版本 (${latestVersion}) 或更高版本`
-                updateStatus.timestamp = Date.now()
-                updateStatus.totalTried = 0
-                updateStatus.latest = latestVersion
-                writeFile(systoolsGlobalCacheFile, systoolsGlobal)
-                return
-            }
+    //         if (!checkVersion(latestVersion, updateStatus.latest)) {
+    //             logger.debug(`已经是最新版本 (${latestVersion}) 或更高版本, 退出更新操作`)
+    //             updateStatus.tiped = false
+    //             updateStatus.code = 0
+    //             updateStatus.msg = 'isLatest'
+    //             updateStatus.desc = `已经是最新版本 (${latestVersion}) 或更高版本`
+    //             updateStatus.timestamp = Date.now()
+    //             updateStatus.totalTried = 0
+    //             updateStatus.latest = latestVersion
+    //             writeFile(systoolsGlobalCacheFile, systoolsGlobal)
+    //             return
+    //         }
 
-            if (config.maxTry > 0 && updateStatus.totalTried > config.maxTry) {
-                if (updateStatus.timestamp && Date.now() - updateStatus.timestamp <= config.failedColdTime * Time.second) {
-                    logger.debug(`超过最大连续更新尝试上限, 退出更新操作`)
-                    updateStatus.tiped = false
-                    writeFile(systoolsGlobalCacheFile, systoolsGlobal)
-                    return
-                } else {
-                    updateStatus.totalTried = 0
-                }
-            }
+    //         if (config.maxTry > 0 && updateStatus.totalTried > config.maxTry) {
+    //             if (updateStatus.timestamp && Date.now() - updateStatus.timestamp <= config.failedColdTime * Time.second) {
+    //                 logger.debug(`超过最大连续更新尝试上限, 退出更新操作`)
+    //                 updateStatus.tiped = false
+    //                 writeFile(systoolsGlobalCacheFile, systoolsGlobal)
+    //                 return
+    //             } else {
+    //                 updateStatus.totalTried = 0
+    //             }
+    //         }
 
-            // 提醒过了就当作更新了 (x
-            logger.info(`有新版本啦! (${updateStatus.latest} => ${latestVersion})`)
-            updateStatus.tiped = true
-            updateStatus.code = 0
-            updateStatus.msg = 'updatedSuccessfully'
-            updateStatus.desc = `有新版本啦! (${updateStatus.latest} => ${latestVersion})`
-            updateStatus.timestamp = Date.now()
-            updateStatus.totalTried = 0
-            updateStatus.latest = latestVersion
+    //         // 提醒过了就当作更新了 (x
+    //         logger.info(`有新版本啦! (${updateStatus.latest} => ${latestVersion})`)
+    //         updateStatus.tiped = true
+    //         updateStatus.code = 0
+    //         updateStatus.msg = 'updatedSuccessfully'
+    //         updateStatus.desc = `有新版本啦! (${updateStatus.latest} => ${latestVersion})`
+    //         updateStatus.timestamp = Date.now()
+    //         updateStatus.totalTried = 0
+    //         updateStatus.latest = latestVersion
 
-            writeFile(systoolsGlobalCacheFile, systoolsGlobal)
-        }
+    //         writeFile(systoolsGlobalCacheFile, systoolsGlobal)
+    //     }
 
-        eventFunctions.checkUpdate = checkUpdateFunc
-        systoolsGlobal.eventsList.push({
-            name: 'checkUpdate',
-            target: Date.now(),  // 立即检查更新
-            flags: ['clearAfterReload'],
-            catched: false
-        })
-    }
+    //     eventFunctions.checkUpdate = checkUpdateFunc
+    //     systoolsGlobal.eventsList.push({
+    //         name: 'checkUpdate',
+    //         target: Date.now(),  // 立即检查更新
+    //         flags: ['clearAfterReload'],
+    //         catched: false
+    //     })
+    // }
 
-    writeFile(systoolsGlobalCacheFile, systoolsGlobal)  // 更新 backupIntervalId 和/或 githubBackupIntervalId
+    // writeFile(systoolsGlobalCacheFile, systoolsGlobal)  // 更新 backupIntervalId 和/或 githubBackupIntervalId
 
     // ctx.on('command/before-execute', () => {
     //     const obj = systoolsGlobal.useFrequencys[new Date().getHours()]
@@ -376,6 +378,27 @@ export async function apply(ctx: Context, config: Config) {
 
     //     writeFile(systoolsGlobalCacheFile, systoolsGlobal)
     // })
+
+    const verifyCode = ctx.updater.register(
+        ctx,
+        {
+            update(shortname, currentVersion, latestVersion) {
+                const updateStatus = systoolsGlobal.updateStatus
+
+                logger.info(`有新版本啦! (${updateStatus.latest} => ${latestVersion})`)
+                updateStatus.tiped = true
+                updateStatus.code = 0
+                updateStatus.msg = 'updatedSuccessfully'
+                updateStatus.desc = `有新版本啦! (${updateStatus.latest} => ${latestVersion})`
+                updateStatus.timestamp = Date.now()
+                updateStatus.totalTried = 0
+                updateStatus.latest = latestVersion
+
+                return true
+            },
+        },
+        true
+    )
 
     const commands = ['systools', 'systools/system', 'systools/process', 'systools/debug',]
 

@@ -30,9 +30,7 @@ async function remove(eventName: EventNames, eventsList: EventsList, rule: 'keep
     for (let i = 0; i < eventsList.length; i++) {
         const event = eventsList[i]
         if (!event.catched && event.name == eventName && event.flags.includes(rule)) {
-            if (rule === 'keepLatest' && event.target < target) {
-                event.catched = true
-            } else if (rule === 'keepEarliest' && event.target > target) {
+            if ((rule === 'keepLatest' && event.target < target) || (rule === 'keepEarliest' && event.target > target)) {
                 event.catched = true
             }
         }

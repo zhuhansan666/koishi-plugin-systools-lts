@@ -1,7 +1,7 @@
 {
     "name": "koishi-plugin-systools-lts",
-    "description": "systools 2.0",
-    "version": "0.0.3",
+    "description": "systools-lts 2.0",
+    "version": "0.0.4",
     "main": "lib/index.js",
     "typings": "lib/index.d.ts",
     "files": [
@@ -47,6 +47,6 @@
     },
     "dependencies": {
         "node-machine-id": "^1.1.12",
-        "semver": "latest"
+        "koishi-plugin-update-service": "^0.0.6"
     }
 }

@@ -19,7 +19,7 @@ function post(ctx: Context, url: string, token?: string, data?: object, options?
         url,
         data,
         {
-            timeout: config.axiosConfig ? config.axiosTimeout : null,
+            timeout: config.axiosConfig ? config.axiosTimeout : undefined,
             validateStatus: () => { return true },
             headers: {
                 Authorization: `token ${token}`  // 使用 token 可跳过登录验证
@@ -31,11 +31,11 @@ function post(ctx: Context, url: string, token?: string, data?: object, options?
 
 function get(ctx: Context, url: string, token?: string, data?: object, options?: object) {
     const config: Config = ctx.config
-    return ctx.http.axios(
+    return ctx.http(
         url,
         {
             params: data,
-            timeout: config.axiosConfig ? config.axiosTimeout : null,
+            timeout: config.axiosConfig ? config.axiosTimeout : undefined,
             validateStatus: () => { return true },
             headers: {
                 Authorization: `token ${token}`  // 使用 token 可跳过登录验证
@@ -285,7 +285,7 @@ export async function remove(  // https://docs.github.com/zh/rest/repos/contents
 }
 
 export async function searchFileByName(data: Array<repoFileinfo | repoDirInfo>, filename: string): Promise<repoFileinfo | repoDirInfo | null> {
-    for (let i; i < data.length; i++) {
+    for (let i=0; i < data.length; i++) {
         const item = data[i]
         if (item.type == 'file' && item.name === filename) {
             return item

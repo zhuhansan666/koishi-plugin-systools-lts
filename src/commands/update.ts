@@ -2,17 +2,17 @@ import { Context, Session, Time, h } from "koishi";
 import {} from '@koishijs/plugin-http'
 
 import { systoolsGlobal } from "../share";
-import { getLatestVersion, checkVersion, install } from '../common/updater'
 
 export default async function update(ctx: Context, session: Session) {
     session.send(`开始检查更新, 请稍后...`)
 
     const pluginFullName = systoolsGlobal.packageJson['name']
-    const { status, data: latestVersion, msg } = await getLatestVersion(ctx, pluginFullName)
+    const latestVersion = await ctx.updater.checkUpdate(ctx, pluginFullName)
 
-    if (status) {
-        return `检查更新失败: ${msg}`
-    } else if (!checkVersion(latestVersion, systoolsGlobal.packageJson['version'])) {
+
+    if (!latestVersion) {
+        return `检查更新失败`
+    } else if (latestVersion === systoolsGlobal.packageJson['version']) {
         return `已是最新版本`
     }
 
@@ -24,11 +24,9 @@ export default async function update(ctx: Context, session: Session) {
 
     session.send(`正在安装更新, 请不要关闭框架...`)
 
-    const deps = {}
-    deps[pluginFullName] = latestVersion
-    const { status: installStatus, msg: installMsg } = await install(ctx, deps)
-    if (installStatus) {
-        return `安装失败, ${msg ? `${msg}` : '具体内容详见日志'}`
+    const status = await ctx.updater.install(ctx, pluginFullName, latestVersion)
+    if (status) {
+        return `安装失败, 具体内容详见日志`
     }
 
     systoolsGlobal.eventsList.push({
