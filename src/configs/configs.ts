@@ -10,6 +10,7 @@ export const defaultGlobal: systoolsGlobal = {
     systoolsGlobalCacheFile: '',
     eventsLoopIntervalId: null,
     eventsList: [],
+    telemetryHistory: [],
     updateStatus: {
         tiped: false,
         code: 0,

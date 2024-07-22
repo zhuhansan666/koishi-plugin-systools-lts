@@ -1,14 +1,14 @@
-import { Context, Schema, Session, Time, remove } from 'koishi'
+import { Context, Schema, Session, Time } from 'koishi'
 import {} from '@koishijs/plugin-http'
 import path from 'path'
 
 import {} from 'koishi-plugin-update-service'
+import { getErrorDetail } from 'koishi-plugin-lovemilk-telemetry'
 
 import { machineId } from './configs/configs'
-import { Object2String } from "./debug/functions"
 
 export const name = 'systools-lts'
-export const inject = ['http', 'updater']
+export const inject = ['http', 'updater', 'lovemilkTelemetry']
 
 export const usage = `
 ## 设备唯一识别码
@@ -16,6 +16,12 @@ export const usage = `
 `
 
 export interface Config {
+    allowTelemetry: boolean,
+    // telemetryReconnectInterval: number,
+    // telemetryUseTimeoutMoreThan: number,
+    // telemetryMaxTry: number,
+    // telemetryCoolDown: number,
+
     axiosConfig: boolean,
     axiosTimeout: number,
 
@@ -31,16 +37,52 @@ export interface Config {
     githubToken: string,
     repoName: string,
     githubBackupFiles: Array<string>,
-    skipEmptyThreshold: number,
+    githubSkipEmptyThreshold: number,
     githubBackupInterval: number,
     keepGithubBackupFiles: number,
 
     checkUpdateInterval: number,
-    maxTry: number,
-    failedColdTime: number
+    updateMaxTry: number,
+    updateFailedColdTime: number
 }
 
+const isDev = process.env.NODE_ENV === 'development'
+
 export const Config: Schema<Config> = Schema.intersect([
+    Schema.object({
+        allowTelemetry: Schema.boolean()
+            .default(true)
+            .description('帮帮我们! 用户大人!<br> > 开启后, 插件将在保证用户隐私前提下, 上传必要的错误调试信息等'),
+    })
+        .description('遥测配置'),
+    //     telemetryReconnectInterval: Schema.number()
+    //         .min(1)
+    //         .max(Time.day)
+    //         .default(Time.minute * 5)
+    //         .description('遥测重连间隔 (毫秒)')
+    //         .step(1)
+    //         .hidden(!isDev),
+    //     telemetryUseTimeoutMoreThan: Schema.number()
+    //         .min(3)
+    //         .default(10)
+    //         .description('当遥测连续重连失败 (不包括首次连接) 大于该值后, 使用 \`telemetryReconnectInterval\` 毫秒 遥测重连间隔, 否则, 使用超时时间作为重连间隔')
+    //         .step(1)
+    //         .hidden(!isDev),
+    //     telemetryMaxTry: Schema.number()
+    //         .min(10)
+    //         .default(15)
+    //         .description('当遥测连续重连失败 (不包括首次连接) 大于该值后, 暂停 \`telemetryCoolDown\` 毫秒后重制重连状态')
+    //         .step(1)
+    //         .hidden(!isDev),
+    //     telemetryCoolDown: Schema.number()
+    //         .min(Time.minute * 5)
+    //         .default(Time.hour * 12)
+    //         .description('当遥测连续重连失败 (不包括首次连接) 大于 \`telemetryMaxTry\` 后, 暂停 该值(毫秒) 后重制重连状态')
+    //         .step(1)
+    //         .hidden(!isDev),
+    // })
+        // .description('遥测配置'),
+
     Schema.object({
         axiosConfig: Schema.boolean()
             .default(false)
@@ -147,7 +189,7 @@ export const Config: Schema<Config> = Schema.intersect([
             .default(10 * 60)
             .description('更新连续失败冷却时间 秒')
     }).description('更新配置')
-        .hidden(process.env.NODE_ENV !== 'development')  // 生产环境不让用户瞎改我的更新配置
+        .hidden(!isDev)  // 生产环境不让用户瞎改我的更新配置
 
 ]) as Schema<Config>  // 奇奇怪怪的 bug 给他修掉
 
@@ -166,7 +208,6 @@ import { githubBackup } from './common/githubBackup'
 import { reload } from './common/updater'
 import loop from './events/loop'
 import { functions as eventFunctions } from './events/loop'
-
 
 export async function apply(ctx: Context, config: Config) {
     const systoolsGlobalCacheFile = path.resolve(ctx.baseDir, 'cache/systools/systoolGlobal.json')
@@ -209,6 +250,75 @@ export async function apply(ctx: Context, config: Config) {
     eventFunctions.reload = async () => {
         await reload(ctx)
     }
+
+    // 初始化遥测
+    const telemetryEndpoint = `wss://api.lovemilk.top:5150/api/plugin/${name}/${systoolsGlobal.packageJson['version'] ?? 'null'}/telemetry`
+    // logger.warn('目前正在使用开发环境本地遥测服务器, 切勿忘记修改!')
+    // const telemetryEndpoint = `ws://127.0.0.1:5150/api/plugin/${name}/${systoolsGlobal.packageJson['version'] ?? 'null'}/telemetry`
+    const telemetryClient = ctx.lovemilkTelemetry.createClient(ctx, config, telemetryEndpoint)
+
+    config.allowTelemetry ? telemetryClient.enable() : telemetryClient.disable()
+
+    telemetryClient.onSend = (event, _) => {
+        if(event.name === 'ping') { return }
+        systoolsGlobal.telemetryHistory.push(event)
+    }
+    telemetryClient.appendEventHistory(systoolsGlobal.telemetryHistory)
+
+    try {
+        const onlineResp = await telemetryClient.connect()
+
+        if (onlineResp && onlineResp.code !== 200) {
+            telemetryClient.sendEvent('exc', { 
+                command: '$telemetry connect',
+                error: { 
+                    stack: getErrorDetail(onlineResp),
+                    message: onlineResp.message ?? 'Unknown message',
+                    name: 'telemetry handshake error',
+                },
+            })
+            logger.warn(`failed to handshake with telemetry server: ${onlineResp.code}: ${onlineResp.message}\n${getErrorDetail(onlineResp)}`)
+        }
+    } catch (e) {
+        logger.warn(`failed to connect to telemetry server:\n${e.stack}`)
+
+        // 这边连不上发事件其实是本地存储
+        telemetryClient.sendEvent('exc', { 
+            command: '$telemetry connect',
+            error: { 
+                stack: e.stack,
+                message: e.message,
+                name: e.name,
+            },
+        })
+    }
+
+    function makeErrorCallback(command: string) {
+        return async (session: Session, err: string | Error) => {
+            if (err instanceof Error) {
+                await telemetryClient.sendEvent('exc', {
+                    command: command,
+                    sessionContent: session.content,
+                    error: {
+                        stack: err.stack,
+                        message: err.message,
+                        name: err.name,
+                    },
+                    platform: session.platform,
+                    timestamp: session.timestamp
+                })
+            } else {
+                await telemetryClient.sendEvent('failed', {
+                    command: command,
+                    sessionContent: session.content,
+                    msg: err,
+                    platform: session.platform,
+                    timestamp: session.timestamp
+                })
+            }
+        }
+    }
+
 
     if (config.enableBackup) {  // 初始化 本地备份
         if (config.backupFiles.length <= 0) {
@@ -412,6 +522,13 @@ export async function apply(ctx: Context, config: Config) {
         const command = commands[i]
         ctx.command(command, '当前可用的指令有:')
             .action(async ({ session }) => {
+                telemetryClient.sendEvent('command', {
+                    command: command,
+                    sessionContent: session.content,
+                    platform: session.platform,
+                    timestamp: session.timestamp
+                })
+
                 const cmds = command.split('/')
                 session.execute(`help ${cmds[cmds.length-1]}`)
             })
@@ -419,55 +536,118 @@ export async function apply(ctx: Context, config: Config) {
 
     ctx.command('systools/update', '检查更新')
         .action(async ({ session }) => {
-            return await update(ctx, (session as Session))
+            telemetryClient.sendEvent('command', {
+                command: 'update',
+                sessionContent: session.content,
+                platform: session.platform,
+                timestamp: session.timestamp
+            })
+
+            return await update(ctx, (session as Session), makeErrorCallback('update'))
         })
 
     ctx.command('systools/systools-version', '获取当前插件版本 (基于读取 package.json)')
         .action(async ({ session }) => {
+            telemetryClient.sendEvent('command', {
+                command: 'systools-version',
+                sessionContent: session.content,
+                platform: session.platform,
+                timestamp: session.timestamp
+            })
+
             return `版本: ${systoolsGlobal.packageJson['version'] ?? '0.0.0'}`
         })
 
     ctx.command('systools/system/ip', '获取 koishi 所在设备 IP')
         .action(async ({ session }) => {
+            telemetryClient.sendEvent('command', {
+                command: 'ip',
+                sessionContent: `${session.content} -> ping`,
+                platform: session.platform,
+                timestamp: session.timestamp
+            })
+
             session.content = 'ping'
             return await session.execute('ping')
         })
 
     ctx.command('systools/system/ping [ip:text]', '使用 API ping 指定网站\n> 当不指定 IP 时, 获取 koishi 所在设备 IP')
         .action(async ({ session }, ip?: string) => {
-            return await ping(ctx, (session as Session), ip)
+            telemetryClient.sendEvent('command', {
+                command: 'ping',
+                sessionContent: session.content,
+                platform: session.platform,
+                timestamp: session.timestamp
+            })
+
+            return await ping(ctx, (session as Session), ip, makeErrorCallback('ping'))
         })
 
     ctx.command('systools/system/sysinfo', '获取系统运行信息')
         .action(async ({ session }) => {
+            telemetryClient.sendEvent('command', {
+                command: 'sysinfo',
+                sessionContent: session.content,
+                platform: session.platform,
+                timestamp: session.timestamp
+            })
+
             return await sysinfo(ctx, (session as Session))
         })
 
     ctx.command('systools/process/taskrun <command:text>', '使用 exec 运行系统命令\n> 注意: 运行的所有指令将直接应用于您的系统, 固最低权限为 3, 请您按需更改指令权限.\n> 同时, 该指令为实验性指令, 可能发生诸如 命令输出混乱 / 刷屏 / 杀死进程无效 等状况, 所造成的任何后果均需用户自行承担.', { authority: 3 })
         .action(async ({ session }) => {
-            return await exec(ctx, (session as Session))
+            telemetryClient.sendEvent('command', {
+                command: 'taskrun',
+                sessionContent: session.content,
+                platform: session.platform,
+                timestamp: session.timestamp
+            })
+
+            return await exec(ctx, (session as Session), makeErrorCallback('taskrun'))
         })
 
     ctx.command('systools/process/taskkill', '杀死指定或所有未关闭进程(仅限由 taskrun 指令所运行的进程)\n当 pid 为空时杀死所有进程\n> 注意: 本指令最低权限为 3, 请您按需更改指令权限.', { authority: 3 })
         .option('pid', '-p [pid:posint] 指定进程的 PID')
         .action(async ({ session, options }) => {
-            return await kill(ctx, (session as Session), options.pid)
+            telemetryClient.sendEvent('command', {
+                command: 'taskkill',
+                sessionContent: session.content,
+                platform: session.platform,
+                timestamp: session.timestamp
+            })
+
+            return await kill(ctx, (session as Session), makeErrorCallback('taskkill'), options.pid)
         })
 
     ctx.command('systools/process/taskinput', '向指定进程(仅限由 taskrun 指令所运行的进程)输入内容\n> 注意: 本指令最低权限为 3, 请您按需更改指令权限.', { authority: 3 })
         .option('pid', '-p <pid:posint> 指定进程的 PID')
         .option('msg', '-m <msg:text> 输入的内容')
         .action(async ({ session, options }) => {
-            return await input(ctx, (session as Session), options.pid, options.msg)
+            telemetryClient.sendEvent('command', {
+                command: 'taskinput',
+                sessionContent: session.content,
+                platform: session.platform,
+                timestamp: session.timestamp
+            })
+
+            return await input(ctx, (session as Session), options.pid, options.msg, makeErrorCallback('taskinput'))
         })
 
     ctx.command('systools/process/tasklist', '获取进程列表(仅限由 taskrun 指令所运行的进程)')
         .option('pid', '-p [pid:posint] 获取指定进程 PID 的信息')
         .action(async ({ session, options }) => {
+            telemetryClient.sendEvent('command', {
+                command: 'tasklist',
+                sessionContent: session.content,
+                platform: session.platform,
+                timestamp: session.timestamp
+            })
+
             return await list(ctx, (session as Session), options.pid)
         })
 
-    ctx.on('dispose', () => {
+    ctx.on('dispose', async() => {
         if (systoolsGlobal.eventsLoopIntervalId) {
             try {
                 clearInterval(systoolsGlobal.eventsLoopIntervalId)
@@ -477,6 +657,14 @@ export async function apply(ctx: Context, config: Config) {
         }
 
         writeFile(systoolsGlobalCacheFile, systoolsGlobal)  // 更新 backupIntervalId 和/或 githubBackupIntervalId
+
+        // await telemetryClient.sendEvent('offline', { config })
+
+        // try {
+        //     await telemetryClient.disconnect()
+        // } catch(e) {
+        //     logger.warn(`telemetry faield to disconnect:\n${e.stack}`)
+        // }
     })
 
     if (process.env.NODE_ENV === 'development') {
@@ -490,12 +678,24 @@ export async function apply(ctx: Context, config: Config) {
 
         ctx.command('systools.debug.update')
             .action(() => {
-                return debug.Object2String(systoolsGlobal.updateStatus)
+                return debug.Object2String(systoolsGlobal.updateStatus) ?? 'empty'
             })
 
         ctx.command('systools.debug.events')
             .action(() => {
-                return debug.Object2String(systoolsGlobal.eventsList)
+                return debug.Object2String(systoolsGlobal.eventsList) ?? 'empty'
+            })
+
+        ctx.command('systools.debug.telemetry')
+            .action(() => {
+                return debug.Object2String(systoolsGlobal.telemetryHistory) ?? 'empty'
+            })
+        
+        ctx.command('systools.debug.test')
+            .action(({session}) => {
+                logger.debug(session)
+                logger.debug(JSON.stringify(session))
+                logger.debug(new Error('test').stack)
             })
     }
 }

@@ -8,7 +8,7 @@ export function post(ctx: Context, url: string, data?: object, options?: object)
         url,
         data,
         {
-            timeout: config.axiosConfig ? config.axiosTimeout : null,
+            timeout: config.axiosConfig ? config.axiosTimeout : void 0,
             validateStatus: () => { return true },
             ...options
         }
@@ -21,7 +21,7 @@ export function get(ctx: Context, url: string, data?: object, options?: object) 
         url,
         {
             params: data,
-            timeout: config.axiosConfig ? config.axiosTimeout : null,
+            timeout: config.axiosConfig ? config.axiosTimeout : void 0,
             validateStatus: () => { return true },
             ...options
         }

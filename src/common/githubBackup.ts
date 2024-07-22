@@ -80,8 +80,8 @@ export async function githubBackup(ctx: Context, filename: string, githubPath: s
     logger.info(`尝试将备份上传至 Github`)
 
     const fileStat = await fsStat(filename)
-    if (fileStat.size <= config.skipEmptyThreshold) {
-        logger.info(`文件 ${filename} 小于等于 ${config.skipEmptyThreshold} 字节, 跳过上传`)
+    if (fileStat.size <= config.githubSkipEmptyThreshold) {
+        logger.info(`文件 ${filename} 小于等于 ${config.githubSkipEmptyThreshold} 字节, 跳过上传`)
         return
     }
 

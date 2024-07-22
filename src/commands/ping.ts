@@ -5,7 +5,7 @@ import { ipAPI, ipAPIArgs } from "../configs/configs"
 import { ipAPIResult } from "../types/types"
 import { Config } from ".."
 
-export default async function ping(ctx: Context, session: Session, ip: string) {
+export default async function ping(ctx: Context, session: Session, ip: string, errorCallback: (session: Session, msg: string | Error) => void) {
     const config: Config = ctx.config
     if (ip) {
         let newip = ip.replace(new RegExp('h?t?t?p?s?:?//', 'g'), '')
@@ -27,8 +27,10 @@ export default async function ping(ctx: Context, session: Session, ip: string) {
     try {
         const data: ipAPIResult = await ctx.http.get(`${ipAPI}${ip ?? ''}?${ipAPIArgs}`, { timeout: config.axiosConfig ? config.axiosTimeout : null, validateStatus: () => { return true } })
         if (!data || typeof data === 'string') {
+            errorCallback(session, `请求失败, 返回值不符合 JSON 标准\n${data}`)
             return `请求失败, 返回值不符合 JSON 标准\n${data}`
         } else if (data.status == 'fail') {
+            errorCallback(session, `请求失败, 请检查 IP 是否正确\n错误信息: ${data.message}`)
             return `请求失败, 请检查 IP 是否正确\n错误信息: ${data.message}`
         }
 
@@ -44,6 +46,7 @@ ${data.proxy ? '\n该 IP 是代理服务器/虚拟专用网络服务器/洋葱�
 ${data.hosting ? '\n该 IP 是数据中心/网络托管商' : ''}`
 
     } catch (error) {
+        errorCallback(session, error)
         return `请求失败\n${error.stack}`
     }
 }

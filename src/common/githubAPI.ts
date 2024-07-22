@@ -19,7 +19,7 @@ function post(ctx: Context, url: string, token?: string, data?: object, options?
         url,
         data,
         {
-            timeout: config.axiosConfig ? config.axiosTimeout : undefined,
+            timeout: config.axiosConfig ? config.axiosTimeout : void 0,
             validateStatus: () => { return true },
             headers: {
                 Authorization: `token ${token}`  // 使用 token 可跳过登录验证
@@ -35,7 +35,7 @@ function get(ctx: Context, url: string, token?: string, data?: object, options?:
         url,
         {
             params: data,
-            timeout: config.axiosConfig ? config.axiosTimeout : undefined,
+            timeout: config.axiosConfig ? config.axiosTimeout : void 0,
             validateStatus: () => { return true },
             headers: {
                 Authorization: `token ${token}`  // 使用 token 可跳过登录验证

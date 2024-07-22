@@ -1,7 +1,7 @@
 {
     "name": "koishi-plugin-systools-lts",
     "description": "systools-lts 2.0",
-    "version": "0.0.7",
+    "version": "0.0.8",
     "main": "lib/index.js",
     "typings": "lib/index.d.ts",
     "files": [
@@ -14,11 +14,11 @@
         "test": "lib/index.js"
     },
     "contributors": [
-        "爱喝牛奶 <zhuhansan666@outlook.com>"
+        "lovemilk <lovemilk-Inc@proton.me>"
     ],
     "author": {
-        "name": "爱喝牛奶",
-        "email": "zhuhansan666@outlook.com",
+        "name": "lovemilk",
+        "email": "lovemilk-Inc@proton.me",
         "url": "https://github.com/zhuhansan666/"
     },
     "keywords": [
@@ -46,7 +46,8 @@
         "@koishijs/client": "^5.11.0"
     },
     "dependencies": {
-        "koishi-plugin-update-service": "^0.0.7",
+        "koishi-plugin-update-service": "^0.0.8",
+        "koishi-plugin-lovemilk-telemetry": "^0.0.1",
         "node-machine-id": "^1.1.12"
     }
 }

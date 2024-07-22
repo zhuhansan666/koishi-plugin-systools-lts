@@ -1,6 +1,7 @@
 import { ChildProcessByStdio } from "child_process"
 import { Session } from "koishi"
 import { Writable, Readable } from "stream"
+import { TelemetryEvent } from "koishi-plugin-lovemilk-telemetry"
 
 import { Events } from "../events/events"
 
@@ -21,6 +22,7 @@ export type systoolsGlobal = {
     systoolsGlobalCacheFile: string
     eventsLoopIntervalId: number,
     eventsList: Array<Events>,
+    telemetryHistory: Array<TelemetryEvent>,
     updateStatus: UpdateStatus,
     packageJson: object,
 }

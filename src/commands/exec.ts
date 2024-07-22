@@ -49,7 +49,7 @@ function getString(data) {
     }
 }
 
-export default async function exec(ctx: Context, session: Session) {
+export default async function exec(ctx: Context, session: Session, errorCallback: (session: Session, msg: string | Error) => void) {
     const execProcesses = shareExecProcesses
     const config: Config = ctx.config
 
@@ -57,6 +57,7 @@ export default async function exec(ctx: Context, session: Session) {
     const rawCommand = h('', h.parse(session.content.slice(koishiCommandLength + 1))).toString(true)  // 这边 +1 是为了删除空格
     
     if (rawCommand.length <= 0 || rawCommand.trim().length <= 0) {
+        errorCallback(session, '错误的语法: 指令为空')
         return '错误的语法: 指令为空'
     }
 
@@ -75,6 +76,7 @@ export default async function exec(ctx: Context, session: Session) {
 
             return `指令输出\n${stdout}\n${stderr}`
         } catch (error) {
+            errorCallback(session, error)
             return `指令运行错误: ${error.stack}`
         }
 
@@ -103,7 +105,7 @@ export default async function exec(ctx: Context, session: Session) {
     return `开始运行, 请坐和放宽\n${rawCommand} (PID: ${cmd.pid})`
 }
 
-export async function kill(ctx: Context, session: Session, targetPid?: number) {
+export async function kill(ctx: Context, session: Session, errorCallback: (session: Session, msg: string | Error) => void, targetPid?: number) {
     const killed = []
     const killFailed = []
 
@@ -135,6 +137,7 @@ export async function kill(ctx: Context, session: Session, targetPid?: number) {
                     if (pid) {
                         killFailed.push(pid)
                     }
+                    errorCallback(session, `kill ${pid} error: ${error.stack}`)
                     logger.warn(`kill ${pid} error: ${error.stack}`)
                 }
             } else {
@@ -146,10 +149,12 @@ export async function kill(ctx: Context, session: Session, targetPid?: number) {
     return `杀死如下进程成功:\n${killed.join(', ')}\n杀死如下进程失败:\n${killFailed.join(', ')}\n`
 }
 
-export async function input(ctx: Context, session: Session, pid: number, msg: string) {
+export async function input(ctx: Context, session: Session, pid: number, msg: string, errorCallback: (session: Session, msg: string | Error) => void) {
     if (!pid) {
+        errorCallback(session, '缺少参数: pid')
         return '缺少参数: pid'
     }else if (!msg) {
+        errorCallback(session, '缺少参数: msg')
         return '缺少参数: msg'
     }
     const execProcesses = shareExecProcesses
@@ -167,6 +172,7 @@ export async function input(ctx: Context, session: Session, pid: number, msg: st
 
             myProcess.stdin.write(`${msg}\n`, async (error) => {
                 if (error) {
+                    errorCallback(session, `输入错误:\n${error.stack}`)
                     session.send(`输入错误:\n${error.stack}`)
                 } else {
                     session.send(`输入成功`)

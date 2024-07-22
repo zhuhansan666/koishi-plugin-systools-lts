@@ -3,7 +3,7 @@ import {} from '@koishijs/plugin-http'
 
 import { systoolsGlobal } from "../share";
 
-export default async function update(ctx: Context, session: Session) {
+export default async function update(ctx: Context, session: Session, errorCallback: (session: Session, msg: string | Error) => void) {
     session.send(`开始检查更新, 请稍后...`)
 
     const pluginFullName = systoolsGlobal.packageJson['name']
@@ -24,6 +24,7 @@ export default async function update(ctx: Context, session: Session) {
 
     const status = await ctx.updater.install(ctx, pluginFullName, latestVersion)
     if (status) {
+        errorCallback(session, `安装失败, 具体内容详见日志`)
         return `安装失败, 具体内容详见日志`
     }
 
