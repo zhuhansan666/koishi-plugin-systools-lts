@@ -24,6 +24,7 @@ export type systoolsGlobal = {
     eventsList: Array<Events>,
     telemetryHistory: Array<TelemetryEvent>,
     updateStatus: UpdateStatus,
+    telemetryHasTipedClients: Array<string>,  // string is the ID of browser
     packageJson: object,
 }
 

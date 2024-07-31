@@ -20,6 +20,7 @@ export const defaultGlobal: systoolsGlobal = {
         totalTried: 0,
         latest: '0.0.0'
     },
+    telemetryHasTipedClients: [],
     packageJson: {},
 }
 
@@ -27,3 +28,5 @@ export const ipAPI = 'http://ip-api.com/json/'
 export const ipAPIArgs = `lang=zh-CN&fields=66846719`
 
 export const machineId = machineIdSync(true)
+
+export const maxTelemetryHistoryLength = 1024

@@ -1,14 +1,14 @@
 import { Context, Schema, Session, Time } from 'koishi'
-import {} from '@koishijs/plugin-http'
+import { } from '@koishijs/plugin-http'
 import path from 'path'
 
-import {} from 'koishi-plugin-update-service'
+import { } from 'koishi-plugin-update-service'
 import { getErrorDetail } from 'koishi-plugin-lovemilk-telemetry'
 
-import { machineId } from './configs/configs'
+import { machineId, maxTelemetryHistoryLength } from './configs/configs'
 
 export const name = 'systools-lts'
-export const inject = ['http', 'updater', 'lovemilkTelemetry']
+export const inject = ['http', 'updater', 'lovemilkTelemetry', 'console']
 
 export const usage = `
 ## 设备唯一识别码
@@ -81,7 +81,7 @@ export const Config: Schema<Config> = Schema.intersect([
     //         .step(1)
     //         .hidden(!isDev),
     // })
-        // .description('遥测配置'),
+    // .description('遥测配置'),
 
     Schema.object({
         axiosConfig: Schema.boolean()
@@ -209,6 +209,13 @@ import { reload } from './common/updater'
 import loop from './events/loop'
 import { functions as eventFunctions } from './events/loop'
 
+declare module '@koishijs/console' {
+    interface Events {
+      'systools-lts/config'(): Config,
+      'systools-lts/telemetry-has-tripped'(string, boolean?): boolean
+    }
+  }
+
 export async function apply(ctx: Context, config: Config) {
     const systoolsGlobalCacheFile = path.resolve(ctx.baseDir, 'cache/systools/systoolGlobal.json')
     systoolsGlobal.systoolsGlobalCacheFile = systoolsGlobalCacheFile
@@ -251,16 +258,48 @@ export async function apply(ctx: Context, config: Config) {
         await reload(ctx)
     }
 
+    if (systoolsGlobal.telemetryHistory && systoolsGlobal.telemetryHistory.length > maxTelemetryHistoryLength) {
+        // 删除最大长度 1/2 的遥测数据
+        systoolsGlobal.telemetryHistory.splice(0, Math.ceil(maxTelemetryHistoryLength / 2))
+    }
+
     // 初始化遥测
-    const telemetryEndpoint = `wss://api.lovemilk.top:5150/api/plugin/${name}/${systoolsGlobal.packageJson['version'] ?? 'null'}/telemetry`
-    // logger.warn('目前正在使用开发环境本地遥测服务器, 切勿忘记修改!')
-    // const telemetryEndpoint = `ws://127.0.0.1:5150/api/plugin/${name}/${systoolsGlobal.packageJson['version'] ?? 'null'}/telemetry`
+    let telemetryEndpoint = `wss://api.lovemilk.top:5150/api/plugin/${name}/${systoolsGlobal.packageJson['version'] ?? 'null'}/telemetry`
+    if (isDev) {
+        logger.warn('目前正在使用开发环境本地遥测服务器')
+        telemetryEndpoint = `ws://127.0.0.1:5150/api/plugin/${name}/${systoolsGlobal.packageJson['version'] ?? 'null'}/telemetry`
+    }
+
     const telemetryClient = ctx.lovemilkTelemetry.createClient(ctx, config, telemetryEndpoint)
 
     config.allowTelemetry ? telemetryClient.enable() : telemetryClient.disable()
 
+    ctx.inject(['console'], (ctx) => {
+        ctx.console.addEntry({
+            dev: path.resolve(__dirname, '../client/index.ts'),
+            prod: path.resolve(__dirname, '../dist'),
+        })
+    })
+
+    ctx.console.addListener('systools-lts/config', () => {
+        return structuredClone(ctx.config)
+    })
+
+    ctx.console.addListener('systools-lts/telemetry-has-tripped', (fingerprint: string, checkOnly: boolean=false) => {
+        const tripped = systoolsGlobal.telemetryHasTipedClients.includes(fingerprint)
+        if (!tripped) {
+            if (!checkOnly) {
+                systoolsGlobal.telemetryHasTipedClients.push(fingerprint)
+                writeFile(systoolsGlobalCacheFile, systoolsGlobal)
+            }
+            return false
+        }
+
+        return true
+    })
+
     telemetryClient.onSend = (event, _) => {
-        if(event.name === 'ping') { return }
+        if (event.name === 'ping') { return }
         systoolsGlobal.telemetryHistory.push(event)
     }
     telemetryClient.appendEventHistory(systoolsGlobal.telemetryHistory)
@@ -269,9 +308,9 @@ export async function apply(ctx: Context, config: Config) {
         const onlineResp = await telemetryClient.connect()
 
         if (onlineResp && onlineResp.code !== 200) {
-            telemetryClient.sendEvent('exc', { 
+            telemetryClient.sendEvent('exc', {
                 command: '$telemetry connect',
-                error: { 
+                error: {
                     stack: getErrorDetail(onlineResp),
                     message: onlineResp.message ?? 'Unknown message',
                     name: 'telemetry handshake error',
@@ -283,9 +322,9 @@ export async function apply(ctx: Context, config: Config) {
         logger.warn(`failed to connect to telemetry server:\n${e.stack}`)
 
         // 这边连不上发事件其实是本地存储
-        telemetryClient.sendEvent('exc', { 
+        telemetryClient.sendEvent('exc', {
             command: '$telemetry connect',
-            error: { 
+            error: {
                 stack: e.stack,
                 message: e.message,
                 name: e.name,
@@ -520,52 +559,52 @@ export async function apply(ctx: Context, config: Config) {
 
     for (let i = 0; i < commands.length; i++) {
         const command = commands[i]
-        ctx.command(command, '当前可用的指令有:')
+        ctx.command(command, '键入本指令以查看帮助')
             .action(async ({ session }) => {
-                telemetryClient.sendEvent('command', {
-                    command: command,
-                    sessionContent: session.content,
-                    platform: session.platform,
-                    timestamp: session.timestamp
-                })
+                // telemetryClient.sendEvent('command', {
+                //     command: command,
+                //     sessionContent: session.content,
+                //     platform: session.platform,
+                //     timestamp: session.timestamp
+                // })
 
                 const cmds = command.split('/')
-                session.execute(`help ${cmds[cmds.length-1]}`)
+                return await session.execute(`help ${cmds[cmds.length - 1]}`)
             })
     }
 
     ctx.command('systools/update', '检查更新')
         .action(async ({ session }) => {
-            telemetryClient.sendEvent('command', {
-                command: 'update',
-                sessionContent: session.content,
-                platform: session.platform,
-                timestamp: session.timestamp
-            })
+            // telemetryClient.sendEvent('command', {
+            //     command: 'update',
+            //     sessionContent: session.content,
+            //     platform: session.platform,
+            //     timestamp: session.timestamp
+            // })
 
             return await update(ctx, (session as Session), makeErrorCallback('update'))
         })
 
     ctx.command('systools/systools-version', '获取当前插件版本 (基于读取 package.json)')
         .action(async ({ session }) => {
-            telemetryClient.sendEvent('command', {
-                command: 'systools-version',
-                sessionContent: session.content,
-                platform: session.platform,
-                timestamp: session.timestamp
-            })
+            // telemetryClient.sendEvent('command', {
+            //     command: 'systools-version',
+            //     sessionContent: session.content,
+            //     platform: session.platform,
+            //     timestamp: session.timestamp
+            // })
 
-            return `版本: ${systoolsGlobal.packageJson['version'] ?? '0.0.0'}`
+            return `${name} 当前版本: ${systoolsGlobal.packageJson['version'] ?? '0.0.0'}`
         })
 
     ctx.command('systools/system/ip', '获取 koishi 所在设备 IP')
         .action(async ({ session }) => {
-            telemetryClient.sendEvent('command', {
-                command: 'ip',
-                sessionContent: `${session.content} -> ping`,
-                platform: session.platform,
-                timestamp: session.timestamp
-            })
+            // telemetryClient.sendEvent('command', {
+            //     command: 'ip',
+            //     sessionContent: `${session.content} -> ping`,
+            //     platform: session.platform,
+            //     timestamp: session.timestamp
+            // })
 
             session.content = 'ping'
             return await session.execute('ping')
@@ -573,36 +612,36 @@ export async function apply(ctx: Context, config: Config) {
 
     ctx.command('systools/system/ping [ip:text]', '使用 API ping 指定网站\n> 当不指定 IP 时, 获取 koishi 所在设备 IP')
         .action(async ({ session }, ip?: string) => {
-            telemetryClient.sendEvent('command', {
-                command: 'ping',
-                sessionContent: session.content,
-                platform: session.platform,
-                timestamp: session.timestamp
-            })
+            // telemetryClient.sendEvent('command', {
+            //     command: 'ping',
+            //     sessionContent: session.content,
+            //     platform: session.platform,
+            //     timestamp: session.timestamp
+            // })
 
             return await ping(ctx, (session as Session), ip, makeErrorCallback('ping'))
         })
 
     ctx.command('systools/system/sysinfo', '获取系统运行信息')
         .action(async ({ session }) => {
-            telemetryClient.sendEvent('command', {
-                command: 'sysinfo',
-                sessionContent: session.content,
-                platform: session.platform,
-                timestamp: session.timestamp
-            })
+            // telemetryClient.sendEvent('command', {
+            //     command: 'sysinfo',
+            //     sessionContent: session.content,
+            //     platform: session.platform,
+            //     timestamp: session.timestamp
+            // })
 
             return await sysinfo(ctx, (session as Session))
         })
 
     ctx.command('systools/process/taskrun <command:text>', '使用 exec 运行系统命令\n> 注意: 运行的所有指令将直接应用于您的系统, 固最低权限为 3, 请您按需更改指令权限.\n> 同时, 该指令为实验性指令, 可能发生诸如 命令输出混乱 / 刷屏 / 杀死进程无效 等状况, 所造成的任何后果均需用户自行承担.', { authority: 3 })
         .action(async ({ session }) => {
-            telemetryClient.sendEvent('command', {
-                command: 'taskrun',
-                sessionContent: session.content,
-                platform: session.platform,
-                timestamp: session.timestamp
-            })
+            // telemetryClient.sendEvent('command', {
+            //     command: 'taskrun',
+            //     sessionContent: session.content,
+            //     platform: session.platform,
+            //     timestamp: session.timestamp
+            // })
 
             return await exec(ctx, (session as Session), makeErrorCallback('taskrun'))
         })
@@ -610,12 +649,12 @@ export async function apply(ctx: Context, config: Config) {
     ctx.command('systools/process/taskkill', '杀死指定或所有未关闭进程(仅限由 taskrun 指令所运行的进程)\n当 pid 为空时杀死所有进程\n> 注意: 本指令最低权限为 3, 请您按需更改指令权限.', { authority: 3 })
         .option('pid', '-p [pid:posint] 指定进程的 PID')
         .action(async ({ session, options }) => {
-            telemetryClient.sendEvent('command', {
-                command: 'taskkill',
-                sessionContent: session.content,
-                platform: session.platform,
-                timestamp: session.timestamp
-            })
+            // telemetryClient.sendEvent('command', {
+            //     command: 'taskkill',
+            //     sessionContent: session.content,
+            //     platform: session.platform,
+            //     timestamp: session.timestamp
+            // })
 
             return await kill(ctx, (session as Session), makeErrorCallback('taskkill'), options.pid)
         })
@@ -624,12 +663,12 @@ export async function apply(ctx: Context, config: Config) {
         .option('pid', '-p <pid:posint> 指定进程的 PID')
         .option('msg', '-m <msg:text> 输入的内容')
         .action(async ({ session, options }) => {
-            telemetryClient.sendEvent('command', {
-                command: 'taskinput',
-                sessionContent: session.content,
-                platform: session.platform,
-                timestamp: session.timestamp
-            })
+            // telemetryClient.sendEvent('command', {
+            //     command: 'taskinput',
+            //     sessionContent: session.content,
+            //     platform: session.platform,
+            //     timestamp: session.timestamp
+            // })
 
             return await input(ctx, (session as Session), options.pid, options.msg, makeErrorCallback('taskinput'))
         })
@@ -637,17 +676,17 @@ export async function apply(ctx: Context, config: Config) {
     ctx.command('systools/process/tasklist', '获取进程列表(仅限由 taskrun 指令所运行的进程)')
         .option('pid', '-p [pid:posint] 获取指定进程 PID 的信息')
         .action(async ({ session, options }) => {
-            telemetryClient.sendEvent('command', {
-                command: 'tasklist',
-                sessionContent: session.content,
-                platform: session.platform,
-                timestamp: session.timestamp
-            })
+            // telemetryClient.sendEvent('command', {
+            //     command: 'tasklist',
+            //     sessionContent: session.content,
+            //     platform: session.platform,
+            //     timestamp: session.timestamp
+            // })
 
             return await list(ctx, (session as Session), options.pid)
         })
 
-    ctx.on('dispose', async() => {
+    ctx.on('dispose', async () => {
         if (systoolsGlobal.eventsLoopIntervalId) {
             try {
                 clearInterval(systoolsGlobal.eventsLoopIntervalId)
@@ -690,9 +729,9 @@ export async function apply(ctx: Context, config: Config) {
             .action(() => {
                 return debug.Object2String(systoolsGlobal.telemetryHistory) ?? 'empty'
             })
-        
+
         ctx.command('systools.debug.test')
-            .action(({session}) => {
+            .action(({ session }) => {
                 logger.debug(session)
                 logger.debug(JSON.stringify(session))
                 logger.debug(new Error('test').stack)
