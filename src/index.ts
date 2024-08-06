@@ -52,7 +52,7 @@ export const Config: Schema<Config> = Schema.intersect([
     Schema.object({
         allowTelemetry: Schema.boolean()
             .default(true)
-            .description('帮帮我们! 用户大人!<br> > 开启后, 插件将在保证用户隐私前提下, 上传必要的错误调试信息等'),
+            .description('帮帮我们! 用户大人!<br> > 开启后, 插件将在保证用户隐私前提下, 上传必要的错误调试信息等<br> 启遥测即视为您已仔细阅读 <a class="el-link el-link--primary is-underline" href="/lovemilk-telemetry/EULA" target="_blank">Lovemilk Telemetry 终端用户协议 & 隐私政策</a> 并同意其中所有条目'),
     })
         .description('遥测配置'),
     //     telemetryReconnectInterval: Schema.number()
@@ -735,6 +735,11 @@ export async function apply(ctx: Context, config: Config) {
                 logger.debug(session)
                 logger.debug(JSON.stringify(session))
                 logger.debug(new Error('test').stack)
+            })
+        
+        ctx.command('systools.debug.error')
+            .action(() => {
+                throw new Error('test')
             })
     }
 }

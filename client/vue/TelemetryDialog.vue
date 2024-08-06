@@ -19,7 +19,7 @@
 </template> 
 
 <script setup lang="ts">
-import { Config } from 'koishi-plugin-systools-lts'
+import {  } from 'koishi-plugin-systools-lts'
 import { useContext, Context, send, store } from '@koishijs/client';
 import {} from '@koishijs/plugin-config'
 import { ref } from 'vue';
