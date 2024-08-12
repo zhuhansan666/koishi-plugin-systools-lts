@@ -188,13 +188,13 @@ export async function input(ctx: Context, session: Session, pid: number, msg: st
 export async function list(ctx: Context, session: Session, pid?: number) {
     const execProcesses = shareExecProcesses
 
-    let result = '| PID\t\t| 会话 ID\t\t| 进程已结束?\t| 命令\t\t\n'
+    let result = '| PID\t\t| 会话 ID\t\t| 状态\t| 命令\t\t\n'
 
     for (let i = 0; i < execProcesses.length; i++) {
         const myProcess = (execProcesses[i] ?? {}).process
         const mySession = (execProcesses[i] ?? {}).session
         if (!pid || myProcess.pid === pid) {
-            result += `| ${myProcess.pid}\t\t| ${mySession.id}\t\t| ${myProcess.killed}\t\t| ${myProcess['command']}\n`
+            result += `| ${myProcess.pid}\t\t| ${mySession.id}\t\t| ${myProcess.killed ? '已结束' : '正运行'}\t\t| ${myProcess['command']}\n`
             if (!pid) {
                 return result
             }

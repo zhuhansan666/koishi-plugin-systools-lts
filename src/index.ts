@@ -34,7 +34,7 @@ export interface Config {
 
     enableGithubBackup: boolean,
     githubUsername: string,
-    githubToken: string,
+    _githubToken: string,
     repoName: string,
     githubBackupFiles: Array<string>,
     githubSkipEmptyThreshold: number,
@@ -205,7 +205,6 @@ import update from './commands/update'
 import { readFile, writeFile } from './common/fs'
 import { githubBackup } from './common/githubBackup'
 
-import { reload } from './common/updater'
 import loop from './events/loop'
 import { functions as eventFunctions } from './events/loop'
 
@@ -253,10 +252,6 @@ export async function apply(ctx: Context, config: Config) {
     systoolsGlobal.eventsLoopIntervalId = parseInt(setInterval(async () => {
         await loop(systoolsGlobal.eventsList)
     }) as any, 50)
-
-    eventFunctions.reload = async () => {
-        await reload(ctx)
-    }
 
     if (systoolsGlobal.telemetryHistory && systoolsGlobal.telemetryHistory.length > maxTelemetryHistoryLength) {
         // 删除最大长度 1/2 的遥测数据
@@ -398,7 +393,7 @@ export async function apply(ctx: Context, config: Config) {
     }
 
     if (config.enableGithubBackup) {  // 初始化 GitHub 云备份
-        if (!config.githubUsername || !config.githubToken) {
+        if (!config.githubUsername || !config._githubToken) {
             logger.warn(`GitHub 备份配置缺少必填项, 退出备份`)
             return
         }

@@ -1,7 +1,7 @@
 {
     "name": "koishi-plugin-systools-lts",
     "description": "systools-lts 2.0",
-    "version": "0.0.11",
+    "version": "0.0.12",
     "main": "lib/index.js",
     "typings": "lib/index.d.ts",
     "files": [
@@ -47,7 +47,7 @@
         "@koishijs/client": "^5.11.0"
     },
     "dependencies": {
-        "koishi-plugin-lovemilk-telemetry": "^0.0.4",
+        "koishi-plugin-lovemilk-telemetry": "^0.0.6",
         "koishi-plugin-update-service": "^0.0.8",
         "node-machine-id": "^1.1.12"
     }

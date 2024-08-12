@@ -60,7 +60,7 @@ function getPluginId(name: string, plugins: object, enableRequired: boolean=true
         }
 
         if (pluginName.startsWith('group:')) {
-            const result = getPluginId(name, plugins[pluginName], enableRequired)
+            const result = getPluginId(name, plugins[pluginName], enableRequired)           
             if (result) {
                 return result
             }
