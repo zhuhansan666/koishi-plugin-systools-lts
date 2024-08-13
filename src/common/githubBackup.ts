@@ -73,8 +73,8 @@ async function githubUpload(ctx: Context, fileBase64: string, filename: string, 
 
 export async function githubBackup(ctx: Context, filename: string, githubPath: string) {
     const config: Config = ctx.config
-    const username = config.githubUsername
-    const repoName = config.repoName
+    const username = config._githubUsername
+    const repoName = config._repoName
     const token = config._githubToken
 
     logger.info(`尝试将备份上传至 Github`)
@@ -111,8 +111,8 @@ export async function githubBackup(ctx: Context, filename: string, githubPath: s
 
 export async function githubRemove(ctx: Context, githubPath: string) {
     const config: Config = ctx.config
-    const username = config.githubUsername
-    const repoName = config.repoName
+    const username = config._githubUsername
+    const repoName = config._repoName
     const token = config._githubToken
 
     const { status, data: repoData, msg } = await repoFilesinfo(ctx, username, repoName, githubPath, token)

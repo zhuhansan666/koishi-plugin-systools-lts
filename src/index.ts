@@ -33,9 +33,9 @@ export interface Config {
     keepBackupFiles: number
 
     enableGithubBackup: boolean,
-    githubUsername: string,
+    _githubUsername: string,
     _githubToken: string,
-    repoName: string,
+    _repoName: string,
     githubBackupFiles: Array<string>,
     githubSkipEmptyThreshold: number,
     githubBackupInterval: number,
@@ -146,15 +146,15 @@ export const Config: Schema<Config> = Schema.intersect([
                 .description(
                     `GitHub 备份规则: 在所创建的仓库的 master 分支的 <[设备唯一识别码](#设备唯一识别码)>/<文件名>/<文件名>.<备份时间的13位时间戳>.bak`
                 ),
-            githubUsername: Schema.string()
+            _githubUsername: Schema.string()
                 .required(true)
-                .description('GitHub 用户名'),
-            githubToken: Schema.string()
+                .description('GitHub 用户名 <br>注意: 必须正确填写 Token 所对应的用户名, 否则可能发生未知错误'),
+            _githubToken: Schema.string()
                 .required(true)
                 .description('GitHub token 用于创建仓库和上传备份文件 <br>注意: 请使用 classic token, 否则可能发生未知错误'),
-            repoName: Schema.string()
+            _repoName: Schema.string()
                 .default('koishi.backup')
-                .description('GitHub 云备份的仓库名称 <br>注意: 由于 `koishi.yml` 可能存在账户等敏感信息, 备份仓库已默认设置为私有, 切勿将敏感信息公开, 否则所造成一切后果于本插件 / koishi 框架 / 开源普通 等均无关'),
+                .description('GitHub 云备份的仓库名称 <br>注意: 由于 `koishi.yml` 可能存在账户等敏感信息, 备份仓库已默认设置为私有, 切勿将敏感信息公开, 否则所造成一切后果于本插件 / koishi 框架 / 开源平台 等均无关'),
             githubBackupFiles: Schema.array(String)
                 .role('table')
                 .default([])
@@ -393,7 +393,7 @@ export async function apply(ctx: Context, config: Config) {
     }
 
     if (config.enableGithubBackup) {  // 初始化 GitHub 云备份
-        if (!config.githubUsername || !config._githubToken) {
+        if (!config._githubUsername || !config._githubToken) {
             logger.warn(`GitHub 备份配置缺少必填项, 退出备份`)
             return
         }
