@@ -32,7 +32,7 @@ export default async function update(ctx: Context, session: Session, errorCallba
         name: 'reload',
         target: Date.now() + 3 * Time.second,  // 延时 3s 重载
         flags: ['clearAfterReload', 'keepEarliest'],
-        catched: false
+        caught: false
     })
     return `安装成功, koishi 将在 ${h('i18n:time', { value: 3 * Time.second })} 后重启`
 }

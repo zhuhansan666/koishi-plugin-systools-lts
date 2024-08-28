@@ -3,20 +3,25 @@ import { } from '@koishijs/plugin-http'
 import path from 'path'
 
 import { } from 'koishi-plugin-update-service'
-import { getErrorDetail } from 'koishi-plugin-lovemilk-telemetry'
-
 import { machineId, maxTelemetryHistoryLength } from './configs/configs'
+import { TelemetryService } from './types/types'
 
 export const name = 'systools-lts'
-export const inject = ['http', 'updater', 'lovemilkTelemetry', 'console']
+export const inject = {
+    required: ['http', 'updater', 'console'],
+    optional: ['lovemilkTelemetry']
+}
 
 export const usage = `
+## 嗷呜嗷呜, 作者要被学校侵蚀, 变成怪物了呜呜呜
+可能到寒假之前插件都不会更新, 这并不是作者跑路了, 只是被学校抓走了而已 :(
+
 ## 设备唯一识别码
 * ${machineId}
 `
 
 export interface Config {
-    allowTelemetry: boolean,
+    telemetryClient: 'false' | 'lovemilkTelemetry' | 'itzdrli',
     // telemetryReconnectInterval: number,
     // telemetryUseTimeoutMoreThan: number,
     // telemetryMaxTry: number,
@@ -48,11 +53,29 @@ export interface Config {
 
 const isDev = process.env.NODE_ENV === 'development'
 
+const telemetryClientSchema = Schema.union([
+    Schema.const('false')
+        .description('禁用遥测')
+    ,
+    Schema.const('lovemilkTelemetry')
+        .description('lovemilkTelemetry - 使用 Lovemilk Telemetry 遥测客户端')
+        .experimental()
+    ,
+    Schema.const('itzdrli')
+        .description('itzdrli - 使用 itzdrli 遥测客户端 (暂未实现)')
+        .experimental()
+        .disabled(),
+    Schema.const('cythes')
+        .description('cythes - 由 CyanChanges 自主研发的遥测客户端 (暂未实现)')
+        .experimental()
+        .disabled(),
+])
+    .default('lovemilkTelemetry')
+    .description('帮帮我们! 用户大人! (选择一个遥测客户端或关闭) <br> > 开启后, 插件将在保证用户隐私前提下, 上传必要的错误调试信息等<br> 启遥测即视为您已仔细阅读 <a class="el-link el-link--primary is-underline" href="/lovemilk-telemetry/EULA" target="_blank">Lovemilk Telemetry 终端用户协议 & 隐私政策</a> 并同意其中所有条目')
+
 export const Config: Schema<Config> = Schema.intersect([
     Schema.object({
-        allowTelemetry: Schema.boolean()
-            .default(true)
-            .description('帮帮我们! 用户大人!<br> > 开启后, 插件将在保证用户隐私前提下, 上传必要的错误调试信息等<br> 启遥测即视为您已仔细阅读 <a class="el-link el-link--primary is-underline" href="/lovemilk-telemetry/EULA" target="_blank">Lovemilk Telemetry 终端用户协议 & 隐私政策</a> 并同意其中所有条目'),
+        telemetryClient: telemetryClientSchema,
     })
         .description('遥测配置'),
     //     telemetryReconnectInterval: Schema.number()
@@ -148,9 +171,11 @@ export const Config: Schema<Config> = Schema.intersect([
                 ),
             _githubUsername: Schema.string()
                 .required(true)
+                .role('secret')
                 .description('GitHub 用户名 <br>注意: 必须正确填写 Token 所对应的用户名, 否则可能发生未知错误'),
             _githubToken: Schema.string()
                 .required(true)
+                .role('secret')
                 .description('GitHub token 用于创建仓库和上传备份文件 <br>注意: 请使用 classic token, 否则可能发生未知错误'),
             _repoName: Schema.string()
                 .default('koishi.backup')
@@ -210,10 +235,11 @@ import { functions as eventFunctions } from './events/loop'
 
 declare module '@koishijs/console' {
     interface Events {
-      'systools-lts/config'(): Config,
-      'systools-lts/telemetry-has-tripped'(string, boolean?): boolean
+        'systools-lts/config'(): Config,
+        'systools-lts/telemetry-has-tripped'(string, boolean?): boolean,
+        'systools-lts/telemetry-services'(): TelemetryService[],
     }
-  }
+}
 
 export async function apply(ctx: Context, config: Config) {
     const systoolsGlobalCacheFile = path.resolve(ctx.baseDir, 'cache/systools/systoolGlobal.json')
@@ -231,10 +257,10 @@ export async function apply(ctx: Context, config: Config) {
     for (let i = 0; i < systoolsGlobal.eventsList.length; i++) {
         const event = systoolsGlobal.eventsList[i]
         if (event && event.flags.includes('clearAfterReload')) {
-            event.catched = true
+            event.caught = true
         }
 
-        if (event && event.catched) {
+        if (event && event.caught) {
             systoolsGlobal.eventsList.splice(i, 1)
         }
     }
@@ -253,21 +279,100 @@ export async function apply(ctx: Context, config: Config) {
         await loop(systoolsGlobal.eventsList)
     }) as any, 50)
 
-    if (systoolsGlobal.telemetryHistory && systoolsGlobal.telemetryHistory.length > maxTelemetryHistoryLength) {
-        // 删除最大长度 1/2 的遥测数据
-        systoolsGlobal.telemetryHistory.splice(0, Math.ceil(maxTelemetryHistoryLength / 2))
+    let telemetryClient = null
+    if (config.telemetryClient === 'false') {
+        logger.success('遥测客户端已禁用')
+    } else if (config.telemetryClient === 'lovemilkTelemetry') {
+        ctx.inject(['lovemilkTelemetry'], async (ctx) => {
+            const { getErrorDetail } = require('koishi-plugin-lovemilk-telemetry')
+
+            if (systoolsGlobal.telemetryHistory && systoolsGlobal.telemetryHistory.length > maxTelemetryHistoryLength) {
+                // 删除最大长度 1/2 的遥测数据
+                systoolsGlobal.telemetryHistory.splice(0, Math.ceil(maxTelemetryHistoryLength / 2))
+            }
+
+            // 初始化 Lovemilk Telemetry 遥测
+            let telemetryEndpoint = `wss://api.lovemilk.top:5150/api/plugin/${name}/${systoolsGlobal.packageJson['version'] ?? 'null'}/telemetry`
+            if (isDev) {
+                logger.warn('目前正在使用开发环境本地遥测服务器')
+                telemetryEndpoint = `ws://127.0.0.1:5150/api/plugin/${name}/${systoolsGlobal.packageJson['version'] ?? 'null'}/telemetry`
+            }
+
+            const telemetryClient = ctx.lovemilkTelemetry.createClient(ctx, config, telemetryEndpoint)
+
+            telemetryClient.enable()
+
+            telemetryClient.onSend = (event, _) => {
+                if (event.name === 'ping') { return }
+                systoolsGlobal.telemetryHistory.push(event)
+            }
+            telemetryClient.appendEventHistory(systoolsGlobal.telemetryHistory)
+
+            try {
+                const onlineResp = await telemetryClient.connect()
+
+                if (onlineResp && onlineResp.code !== 200) {
+                    const stack = getErrorDetail(onlineResp)
+                    telemetryClient.sendEvent('exc', {
+                        command: '$telemetry connect',
+                        error: {
+                            stack,
+                            message: onlineResp.message ?? 'Unknown message',
+                            name: 'telemetry handshake error',
+                        },
+                    })
+                    logger.warn(`failed to handshake with telemetry server: ${onlineResp.code}: ${onlineResp.message}\n${stack}`)
+                }
+            } catch (e) {
+                logger.warn(`failed to connect to telemetry server:\n${e.stack}`)
+
+                // 这边连不上发事件其实是本地存储
+                telemetryClient.sendEvent('exc', {
+                    command: '$telemetry connect',
+                    error: {
+                        stack: e.stack,
+                        message: e.message,
+                        name: e.name,
+                    },
+                })
+            } telemetryClient.onSend = (event, _) => {
+                if (event.name === 'ping') { return }
+                systoolsGlobal.telemetryHistory.push(event)
+            }
+            telemetryClient.appendEventHistory(systoolsGlobal.telemetryHistory)
+
+            try {
+                const onlineResp = await telemetryClient.connect()
+
+                if (onlineResp && onlineResp.code !== 200) {
+                    const stack = getErrorDetail(onlineResp)
+                    telemetryClient.sendEvent('exc', {
+                        command: '$telemetry connect',
+                        error: {
+                            stack,
+                            message: onlineResp.message ?? 'Unknown message',
+                            name: 'telemetry handshake error',
+                        },
+                    })
+                    logger.warn(`failed to handshake with telemetry server: ${onlineResp.code}: ${onlineResp.message}\n${stack}`)
+                }
+            } catch (e) {
+                logger.warn(`failed to connect to telemetry server:\n${e.stack}`)
+
+                // 这边连不上发事件其实是本地存储
+                telemetryClient.sendEvent('exc', {
+                    command: '$telemetry connect',
+                    error: {
+                        stack: e.stack,
+                        message: e.message,
+                        name: e.name,
+                    },
+                })
+            }
+        })
+    } else if (config.telemetryClient === 'itzdrli') {
+        // pass
     }
-
-    // 初始化遥测
-    let telemetryEndpoint = `wss://api.lovemilk.top:5150/api/plugin/${name}/${systoolsGlobal.packageJson['version'] ?? 'null'}/telemetry`
-    if (isDev) {
-        logger.warn('目前正在使用开发环境本地遥测服务器')
-        telemetryEndpoint = `ws://127.0.0.1:5150/api/plugin/${name}/${systoolsGlobal.packageJson['version'] ?? 'null'}/telemetry`
-    }
-
-    const telemetryClient = ctx.lovemilkTelemetry.createClient(ctx, config, telemetryEndpoint)
-
-    config.allowTelemetry ? telemetryClient.enable() : telemetryClient.disable()
 
     ctx.inject(['console'], (ctx) => {
         ctx.console.addEntry({
@@ -276,11 +381,27 @@ export async function apply(ctx: Context, config: Config) {
         })
     })
 
+    // 不重复计算
+    const telemetryServices = telemetryClientSchema.list.map((item) => {
+        const badgeIncludes = (value: string) => {
+            return item.meta?.badges?.some((badge) => badge.text === value) ?? false
+        }
+        return {
+            value: item.value,
+            deprecated: badgeIncludes('deprecated'),
+            experimental: badgeIncludes('experimental'),
+            ...item.meta,  // 可以直接访问 item.meta.disabled 等属性
+        }
+    })
+    ctx.console.addListener('systools-lts/telemetry-services', () => {
+        return telemetryServices
+    })
+
     ctx.console.addListener('systools-lts/config', () => {
         return structuredClone(ctx.config)
     })
 
-    ctx.console.addListener('systools-lts/telemetry-has-tripped', (fingerprint: string, checkOnly: boolean=false) => {
+    ctx.console.addListener('systools-lts/telemetry-has-tripped', (fingerprint: string, checkOnly: boolean = false) => {
         const tripped = systoolsGlobal.telemetryHasTipedClients.includes(fingerprint)
         if (!tripped) {
             if (!checkOnly) {
@@ -293,62 +414,38 @@ export async function apply(ctx: Context, config: Config) {
         return true
     })
 
-    telemetryClient.onSend = (event, _) => {
-        if (event.name === 'ping') { return }
-        systoolsGlobal.telemetryHistory.push(event)
-    }
-    telemetryClient.appendEventHistory(systoolsGlobal.telemetryHistory)
-
-    try {
-        const onlineResp = await telemetryClient.connect()
-
-        if (onlineResp && onlineResp.code !== 200) {
-            telemetryClient.sendEvent('exc', {
-                command: '$telemetry connect',
-                error: {
-                    stack: getErrorDetail(onlineResp),
-                    message: onlineResp.message ?? 'Unknown message',
-                    name: 'telemetry handshake error',
-                },
-            })
-            logger.warn(`failed to handshake with telemetry server: ${onlineResp.code}: ${onlineResp.message}\n${getErrorDetail(onlineResp)}`)
-        }
-    } catch (e) {
-        logger.warn(`failed to connect to telemetry server:\n${e.stack}`)
-
-        // 这边连不上发事件其实是本地存储
-        telemetryClient.sendEvent('exc', {
-            command: '$telemetry connect',
-            error: {
-                stack: e.stack,
-                message: e.message,
-                name: e.name,
-            },
-        })
-    }
-
     function makeErrorCallback(command: string) {
+
         return async (session: Session, err: string | Error) => {
-            if (err instanceof Error) {
-                await telemetryClient.sendEvent('exc', {
-                    command: command,
-                    sessionContent: session.content,
-                    error: {
-                        stack: err.stack,
-                        message: err.message,
-                        name: err.name,
-                    },
-                    platform: session.platform,
-                    timestamp: session.timestamp
-                })
-            } else {
-                await telemetryClient.sendEvent('failed', {
-                    command: command,
-                    sessionContent: session.content,
-                    msg: err,
-                    platform: session.platform,
-                    timestamp: session.timestamp
-                })
+            if (config.telemetryClient === 'false' || !telemetryClient) {
+                // 禁用遥测
+                return
+            }
+
+            if (config.telemetryClient === 'lovemilkTelemetry') {
+                if (err instanceof Error) {
+                    await telemetryClient.sendEvent('exc', {
+                        command: command,
+                        sessionContent: session.content,
+                        error: {
+                            stack: err.stack,
+                            message: err.message,
+                            name: err.name,
+                        },
+                        platform: session.platform,
+                        timestamp: session.timestamp
+                    })
+                } else {
+                    await telemetryClient.sendEvent('failed', {
+                        command: command,
+                        sessionContent: session.content,
+                        msg: err,
+                        platform: session.platform,
+                        timestamp: session.timestamp
+                    })
+                }
+            } else if (config.telemetryClient === 'itzdrli') {
+                // pass
             }
         }
     }
@@ -375,7 +472,7 @@ export async function apply(ctx: Context, config: Config) {
                     name: 'backup',
                     target: Date.now() + config.backupInterval,
                     flags: ['clearAfterReload'],
-                    catched: false
+                    caught: false
                 }
             )
         }
@@ -387,7 +484,7 @@ export async function apply(ctx: Context, config: Config) {
                 name: 'backup',
                 target: Date.now(),
                 flags: ['clearAfterReload'],
-                catched: false
+                caught: false
             }
         )
     }
@@ -417,7 +514,7 @@ export async function apply(ctx: Context, config: Config) {
                 name: 'githubBackup',
                 target: Date.now() + config.githubBackupInterval,
                 flags: ['clearAfterReload'],
-                catched: false
+                caught: false
             })
         }
 
@@ -427,7 +524,7 @@ export async function apply(ctx: Context, config: Config) {
             name: 'githubBackup',
             target: Date.now(),
             flags: ['clearAfterReload'],
-            catched: false
+            caught: false
         })
     }
 
@@ -731,7 +828,7 @@ export async function apply(ctx: Context, config: Config) {
                 logger.debug(JSON.stringify(session))
                 logger.debug(new Error('test').stack)
             })
-        
+
         ctx.command('systools.debug.error')
             .action(() => {
                 throw new Error('test')

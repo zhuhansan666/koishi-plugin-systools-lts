@@ -6,7 +6,7 @@ async function getEarliest(eventName: EventNames, eventsList: EventsList): Promi
     let min = null
     for (let i = 0; i < eventsList.length; i++) {
         const event = eventsList[i]
-        if (!event.catched && event.name == eventName && event.flags.includes('keepEarliest') && (min === null || event.target < min)) {
+        if (!event.caught && event.name == eventName && event.flags.includes('keepEarliest') && (min === null || event.target < min)) {
             min = event.target
         }
     }
@@ -18,7 +18,7 @@ async function getLatest(eventName: EventNames, eventsList: EventsList): Promise
     let max = null
     for (let i = 0; i < eventsList.length; i++) {
         const event = eventsList[i]
-        if (!event.catched && event.name == eventName && event.flags.includes('keepLatest') && (max === null || event.target > max)) {
+        if (!event.caught && event.name == eventName && event.flags.includes('keepLatest') && (max === null || event.target > max)) {
             max = event.target
         }
     }
@@ -29,9 +29,9 @@ async function getLatest(eventName: EventNames, eventsList: EventsList): Promise
 async function remove(eventName: EventNames, eventsList: EventsList, rule: 'keepLatest' | 'keepEarliest', target: number) {
     for (let i = 0; i < eventsList.length; i++) {
         const event = eventsList[i]
-        if (!event.catched && event.name == eventName && event.flags.includes(rule)) {
+        if (!event.caught && event.name == eventName && event.flags.includes(rule)) {
             if ((rule === 'keepLatest' && event.target < target) || (rule === 'keepEarliest' && event.target > target)) {
-                event.catched = true
+                event.caught = true
             }
         }
     }
@@ -74,8 +74,8 @@ export default async function loop(eventsList: EventsList) {
             continue
         }
 
-        if (Date.now() >= event.target && !event.catched) {
-            event.catched = true
+        if (Date.now() >= event.target && !event.caught) {
+            event.caught = true
             const func = functions[event.name]
             if (func) {
                 try {

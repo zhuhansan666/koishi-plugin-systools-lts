@@ -1,7 +1,7 @@
 {
     "name": "koishi-plugin-systools-lts",
     "description": "systools-lts 2.0",
-    "version": "0.0.13",
+    "version": "0.0.14",
     "main": "lib/index.js",
     "typings": "lib/index.d.ts",
     "files": [
@@ -41,13 +41,24 @@
         },
         "locales": [
             "zh"
-        ]
+        ],
+        "service": {
+            "required": [
+                "http",
+                "updater",
+                "console"
+            ],
+            "optional": [
+                "lovemilkTelemetry"
+            ]
+        }
     },
     "devDependencies": {
         "@koishijs/client": "^5.11.0"
     },
     "dependencies": {
-        "koishi-plugin-lovemilk-telemetry": "^0.0.6",
+        "@fingerprintjs/fingerprintjs": "^4.4.3",
+        "koishi-plugin-lovemilk-telemetry": "^0.0.11",
         "koishi-plugin-update-service": "^0.0.8",
         "node-machine-id": "^1.1.12"
     }

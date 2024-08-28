@@ -8,18 +8,18 @@ import { Config } from ".."
 export default async function ping(ctx: Context, session: Session, ip: string, errorCallback: (session: Session, msg: string | Error) => void) {
     const config: Config = ctx.config
     if (ip) {
-        let newip = ip.replace(new RegExp('h?t?t?p?s?:?//', 'g'), '')
-        if (newip.includes(':')) {
-            newip = newip.split(':')[0]
+        let formatIP = ip.replace(new RegExp('h?t?t?p?s?:?//', 'g'), '')
+        if (formatIP.includes(':')) {
+            formatIP = formatIP.split(':')[0]
         }
 
-        if (newip.includes('/') || newip.includes('\\')) {
-            newip = newip.split('/')[0]
-            newip = newip.split('\\')[0]
+        if (formatIP.includes('/') || formatIP.includes('\\')) {
+            formatIP = formatIP.split('/')[0]
+            formatIP = formatIP.split('\\')[0]
         }
 
-        if (newip != ip) {
-            ip = newip
+        if (formatIP != ip) {
+            ip = formatIP
             session.send(`注意: IP 已自动格式化为 ${ip}`)
         }
     }
@@ -34,9 +34,16 @@ export default async function ping(ctx: Context, session: Session, ip: string, e
             return `请求失败, 请检查 IP 是否正确\n错误信息: ${data.message}`
         }
 
+        let country = data.country
+        if (data.countryCode == 'HK' || data.countryCode == 'MO') {
+            country = `中国${country}`
+        } else if (data.countryCode == 'TW') {
+            country = '中国台湾'
+        }
+
         return `请求返回
 IP: ${data.query}
-IP 属地: ${data.continent} ${data.countryCode == 'TW' && data.country.length == 4 ? '中国台湾' : data.country} ${data.regionName} ${data.city} ${data.district}\
+IP 属地: ${data.continent} ${country} ${data.regionName} ${data.city} ${data.district}\
 ${data.isp ? `\n运营商: ${data.isp}` : ''}\
 ${data.org ? `\n组织名称: ${data.org}` : ''}\
 ${data.as ? `\n公司归属: ${data.as}` : ''}\

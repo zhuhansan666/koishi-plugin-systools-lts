@@ -68,3 +68,7 @@ export type ipAPIResult = {  // https://ip-api.com/docs/api:json
     message: string,
     query?: string
 }
+
+export type TelemetryService = {
+    value: string,
+} & Schemastery.Meta<string>
